@@ -1,0 +1,77 @@
+digraph DersKayitAkisi {
+    rankdir=TB;
+    fontsize=12;
+    node [fontname="Inter", fontsize=11, shape=box];
+
+    // Başlangıç / Bitiş
+    start   [shape=oval, label="Başla"];
+    end_ok  [shape=oval, label="Kayıt Kesinleşti"];
+    end_bad [shape=oval, label="Kayıt Sona Erdi / İptal"];
+
+    // Süreç adımları (process)
+    giris          [label="Giriş bilgilerini al\n(öğrenci no + şifre)"];
+    ana_panel      [label="Ana panele yönlendir"];
+    ders_liste     [label="Uygun dersleri listele"];
+    secim_al       [label="Öğrenci ders(ler)ini seçer / düzenler"];
+    kredi_hesap    [label="Toplam krediyi hesapla\n(∑ ders.kredi)"];
+    kaydet_gecici  [label="Geçici kaydı kaydet\n(Seçimler + Toplam Kredi)"];
+    kesinlestir    [label="Kesinleştir ve bildirim göster"];
+
+    // Kontrol noktaları (diamond)
+    c_giris     [shape=diamond, label="Giriş başarılı mı?"];
+    c_kontenjan [shape=diamond, label="Kontenjan uygun mu?\n(her seçilen ders)"];
+    c_onkosul   [shape=diamond, label="Ön koşullar sağlandı mı?\n(her seçilen ders)"];
+    c_cakisma   [shape=diamond, label="Zaman çakışması var mı?"];
+    c_kredi_max [shape=diamond, label="Kredi limiti aşıldı mı?\n(Toplam > Maks)"];
+    c_kredi_min [shape=diamond, label="Minimum kredi altında mı?\n(Toplam < Minimum)"];
+    c_uyari_onay[shape=diamond, label="Uyarılara rağmen\ndevam edilsin mi?"];
+    c_danisman  [shape=diamond, label="Danışman sonucu?\n(ONAY/RED/DÜZELTME)"];
+    c_sure_bit  [shape=diamond, label="Kayıt dönemi bitti mi?"];
+
+    // Akış
+    start -> giris -> c_giris;
+
+    c_giris -> ana_panel [label="Evet"];
+    c_giris -> end_bad   [label="Hayır"];
+
+    ana_panel -> ders_liste -> secim_al -> kredi_hesap;
+
+    // Kontroller zinciri
+    kredi_hesap -> c_kontenjan;
+    c_kontenjan -> c_onkosul [label="Evet"];
+    c_kontenjan -> secim_al  [label="Hayır\n(ders çıkar/alternatif)"];
+
+    c_onkosul -> c_cakisma [label="Evet"];
+    c_onkosul -> secim_al  [label="Hayır\n(eksik ön koşul)"];
+
+    c_cakisma -> secim_al  [label="Evet\n(çakışan dersleri düzelt)"];
+    c_cakisma -> c_kredi_max [label="Hayır"];
+
+    c_kredi_max -> secim_al   [label="Evet\n(aşımı düzelt)"];
+    c_kredi_max -> c_kredi_min[label="Hayır"];
+
+    c_kredi_min -> c_uyari_onay [label="Evet\n(UYARI)"];
+    c_kredi_min -> kaydet_gecici[label="Hayır"];
+
+    c_uyari_onay -> kaydet_gecici [label="Evet"];
+    c_uyari_onay -> secim_al      [label="Hayır\n(düzenle)"];
+
+    // Danışman onayı
+    kaydet_gecici -> c_danisman;
+
+    c_danisman -> kesinlestir [label="ONAY"];
+    c_danisman -> secim_al    [label="RED\n(açıklamaya göre düzelt)"];
+    c_danisman -> secim_al    [label="DÜZELTME\n(isteğe göre düzelt)"];
+
+    kesinlestir -> end_ok;
+
+    // Döngüyü kapatan süre kontrolü
+    // Seçim/düzeltme aşamasından sonra süre bitti mi?
+    secim_al -> c_sure_bit [style=dashed, label="Dönem kontrolü"];
+
+    c_sure_bit -> end_bad   [label="Evet"];
+    c_sure_bit -> kredi_hesap [label="Hayır"];
+
+    // Estetik
+    {rank=same; end_ok; end_bad;}
+}
