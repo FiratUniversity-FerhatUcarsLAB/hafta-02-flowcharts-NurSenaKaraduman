@@ -1,0 +1,121 @@
+
+digraph AkilliEvGuvenlikSistemi {
+  rankdir=TB;
+  fontsize=12;
+  labelloc="t";
+  label="Akıllı Ev Güvenlik Sistemi — Yukarıdan Aşağı Akış Diyagramı";
+
+  node [shape=rectangle, style=rounded, fontsize=10];
+
+  /* ---------------------------
+   * Başlangıç & Kurulum
+   * --------------------------- */
+  start [shape=circle, label="Başlat"];
+  init  [label="Yapılandırmayı Yükle\nSensörleri, Alarmı, Bildiriciyi Başlat\nGünlük & Sağlık İzleme Kur"];
+  loop  [shape=ellipse, label="ANA DÖNGÜ (7/24)"];
+
+  start -> init -> loop;
+
+  /* ---------------------------
+   * Ana Döngü Adımları
+   * --------------------------- */
+  read    [label="1) Sensörleri Oku"];
+  preproc [label="2) Ön İşleme (gürültü azaltma)"];
+  fuse    [label="3) Sensör Füzyonu (durum çıkarımı)"];
+  detect  [label="4) Tehdit Algıla"];
+  decisionThreat [shape=diamond, label="Tehdit seviyesi ≥ eşik mi?"];
+
+  loop -> read -> preproc -> fuse -> detect -> decisionThreat;
+
+  /* Tehdit var yolu */
+  alarmOn   [label="Alarmı Etkinleştir"];
+  notifyBld [label="Bildirim Oluştur"];
+  dedup     [shape=diamond, label="Rate limit / yinelenen kontrolü"];
+  enqueue   [label="Bildirimi Kuyruğa Ekle"];
+  autos     [label="Otomasyonları Çalıştır\n(Kapı kilitle, ışık aç, kamera kaydı)"];
+  histAdd   [label="Tehdit Geçmişine Ekle"];
+
+  decisionThreat -> alarmOn   [label="Evet"];
+  alarmOn -> notifyBld -> dedup;
+  dedup -> enqueue [label="Uygun"];
+  dedup -> autos   [label="Uygun değil"];
+  enqueue -> autos -> histAdd;
+
+  /* Tehdit yok/düşük yolu */
+  alarmActiveQ [shape=diamond, label="Alarm aktif mi?"];
+  falseQ       [shape=diamond, label="Yanlış alarm onaylandı mı?"];
+  alarmOff     [label="Alarmı Pasifleştir"];
+  clearNotif   [label="‘Durum düzeldi’ bildirimi sırala"];
+  keepAlarm    [label="Alarmı sürdür (manuel onay bekliyor)"];
+
+  decisionThreat -> alarmActiveQ [label="Hayır"];
+  alarmActiveQ -> falseQ   [label="Evet"];
+  alarmActiveQ -> histAdd  [label="Hayır"];
+  falseQ -> alarmOff       [label="Evet"];
+  alarmOff -> clearNotif -> histAdd;
+  falseQ -> keepAlarm [label="Hayır"];
+  keepAlarm -> histAdd;
+
+  /* Sağlık kontrolü ve telemetri */
+  healthDueQ [shape=diamond, label="Sağlık kontrol zamanı mı?"];
+  healthChk  [label="Sensör/Alarm/Bildirici Sağlık Raporu"];
+  healthCritQ [shape=diamond, label="Kritik sorun var mı?"];
+  healthAlert [label="Sağlık Uyarısı Bildirimi"];
+  telemetry  [label="Telemetri Derle & Gönder"];
+  sleepNode  [label="Sonraki çevrime kadar bekle"];
+
+  histAdd -> healthDueQ;
+  healthDueQ -> healthChk [label="Evet"];
+  healthDueQ -> telemetry [label="Hayır"];
+  healthChk -> healthCritQ;
+  healthCritQ -> healthAlert [label="Evet"];
+  healthCritQ -> telemetry   [label="Hayır"];
+  healthAlert -> telemetry;
+  telemetry -> sleepNode -> loop;
+
+  /* ---------------------------
+   * Bildirim Gönderici Thread
+   * --------------------------- */
+  subgraph cluster_notify_thread {
+    label="Arka Plan İş Parçacığı: Bildirim Gönderici";
+    style=dashed;
+    rankdir=TB;
+
+    nqDeq   [label="Kuyruktan Bildirim Al (zaman aşımı ile)"];
+    sendTry [label="Bildirimi Gönder"];
+    sendOkQ [shape=diamond, label="Gönderim başarılı mı?"];
+    backoff [label="Artan bekleme ile yeniden sıraya ekle"];
+    altChan [label="Alternatif kanala yükselt (örn. arama)"];
+
+    nqDeq -> sendTry -> sendOkQ;
+    sendOkQ -> nqDeq   [label="Evet"];
+    sendOkQ -> backoff [label="Hayır ve deneme < max"];
+    backoff -> nqDeq;
+    sendOkQ -> altChan [label="Hayır ve deneme ≥ max"];
+    altChan -> nqDeq;
+  }
+
+  /* ---------------------------
+   * Gözcü (Watchdog) Thread
+   * --------------------------- */
+  subgraph cluster_watchdog {
+    label="Arka Plan İş Parçacığı: Gözcü (Watchdog)";
+    style=dashed;
+    rankdir=TB;
+
+    wdPing   [label="Tüm sistemleri ping’le"];
+    wdOkQ    [shape=diamond, label="Sorun var mı?"];
+    safeMode [label="Güvenli Moda Geç"];
+    wdAlert  [label="Acil Uyarı Üret ve Sırala"];
+
+    wdPing -> wdOkQ;
+    wdOkQ -> wdPing   [label="Hayır"];
+    wdOkQ -> safeMode [label="Evet"];
+    safeMode -> wdAlert -> wdPing;
+  }
+
+  /* Bağlantılar */
+  enqueue -> nqDeq   [style=dotted, label="bildirim kuyruğu"];
+  clearNotif -> nqDeq [style=dotted];
+  healthAlert -> nqDeq [style=dotted];
+}
