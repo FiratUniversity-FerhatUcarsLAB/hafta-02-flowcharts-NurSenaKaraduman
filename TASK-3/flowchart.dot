@@ -1,0 +1,56 @@
+digraph HASTANE_SISTEMI {
+    rankdir=TB;
+    node [shape=rectangle, style=rounded, fontname="Arial"];
+
+    // === ANA MENÜ ===
+    START [label="🏥 ANA MENÜ\n1. Randevu Sistemi\n2. Tahlil Sonucu Görüntüleme"];
+    SECIM [label="Kullanıcı Seçim Yapar (1 veya 2)"];
+    START -> SECIM;
+
+    // === MODÜL 1: RANDEVU SİSTEMİ ===
+    subgraph cluster_MODUL1 {
+        label="MODÜL 1: Randevu Sistemi";
+        style=rounded;
+        color=lightblue;
+
+        M1_START [label="Kimlik Doğrulama"];
+        M1_POLIKLINIK [label="Poliklinik Seçimi"];
+        M1_DOKTOR [label="Doktor Listesi Görüntüleme"];
+        M1_SAAT [label="Uygun Saatleri Göster"];
+        M1_ONAY [label="Randevu Onaylama"];
+        M1_SMS [label="SMS Gönderme"];
+        M1_BITIR [label="Modül 1 Bitti"];
+
+        M1_START -> M1_POLIKLINIK -> M1_DOKTOR -> M1_SAAT -> M1_ONAY -> M1_SMS -> M1_BITIR;
+    }
+
+    // === MODÜL 2: TAHLİL SONUCU GÖRÜNTÜLEME ===
+    subgraph cluster_MODUL2 {
+        label="MODÜL 2: Tahlil Sonucu Görüntüleme Sistemi";
+        style=rounded;
+        color=lightgreen;
+
+        M2_START [label="Kimlik Doğrulama"];
+        M2_TAHLIL [label="Tahlil Varlığı Kontrolü"];
+        M2_HAZIR [label="Sonuç Hazır mı?"];
+        M2_GORUNTULE [label="Sonuç Görüntüleme"];
+        M2_PDF [label="PDF İndirme"];
+        M2_BEKLE [label="Sonuç Beklemede Mesajı"];
+        M2_BITIR [label="Modül 2 Bitti"];
+
+        M2_START -> M2_TAHLIL -> M2_HAZIR;
+        M2_HAZIR -> M2_GORUNTULE [label="Evet"];
+        M2_GORUNTULE -> M2_PDF -> M2_BITIR;
+        M2_HAZIR -> M2_BEKLE [label="Hayır"];
+        M2_BEKLE -> M2_BITIR;
+    }
+
+    // === ANA MENÜDEN MODÜLLERE YÖNLENDİRME ===
+    SECIM -> M1_START [label="1"];
+    SECIM -> M2_START [label="2"];
+
+    // === SON ===
+    END [label="Sistem Sonu"];
+    M1_BITIR -> END;
+    M2_BITIR -> END;
+}
