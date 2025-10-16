@@ -1,5 +1,5 @@
-İçeriğe geç
-Sohbet geçmişi
+
+#chatgpt ile Sohbet geçmişi
 
 Şunu dedin:
  şimdi seninle atm den para çekmek üzere bir graphviz üzerinden DOT codu oluşturacağız yazdığım şekilde oluştur ve kopyalamam için bana at
