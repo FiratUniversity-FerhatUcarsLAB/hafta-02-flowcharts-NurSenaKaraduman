@@ -1,0 +1,65 @@
+digraph ATM {
+  rankdir=TB;
+  fontsize=12;
+  labelloc="t";
+  label="ATM İşlem Akışı";
+
+  node [fontname="Helvetica"];
+  start [shape=oval, label="Başla"];
+  insert_card [shape=box, label="Bankamatik'e kartı yerleştir"];
+  wait_pin [shape=box, label="Şifre ekranını bekle"];
+  enter_pin [shape=box, label="4 haneli PIN kodunu gir"];
+  pin_correct [shape=diamond, label="PIN doğru mu?"];
+  try_again [shape=box, label="Tekrar şifre iste"];
+  increment_attempt [shape=box, label="deneme = deneme + 1"];
+  attempts_check [shape=diamond, label="Şifre deneme < 4 ?"];
+  card_swallow [shape=box, label="Bankamatik kartı yutar"];
+  transaction_screen [shape=box, label="İşlemler ekranı açılsın"];
+  choose_withdraw [shape=box, label="Para çekmeye tıkla"];
+  wrong_button [shape=diamond, label="Yanlış tuşa mı basıldı?"];
+  withdraw_screen [shape=box, label="Para çekme ekranı"];
+  sufficient_funds [shape=diamond, label="İstenen nakit ≤ sahip olunan para mı?"];
+  dispense_cash [shape=box, label="Bankamatik parayı verir"];
+  insufficient_msg [shape=box, label="Yeterli para yok uyarısı"];
+  ask_receipt [shape=diamond, label="Fiş isteniyor mu?"];
+  give_card_cash_no [shape=box, label="Kartı ve parayı ver (Fiş yok)"];
+  print_receipt [shape=box, label="Fişi ver"];
+  give_card_cash_yes [shape=box, label="Kartı ve parayı ver (Fiş verildi)"];
+  end [shape=oval, label="Bitir"];
+
+  start -> insert_card;
+  insert_card -> wait_pin;
+  wait_pin -> enter_pin;
+  enter_pin -> pin_correct;
+
+  pin_correct -> try_again [label="Hayır (Yanlış)"];
+  pin_correct -> transaction_screen [label="Evet (Doğru)"];
+
+  /* Yanlış PIN akışı: deneme artışı döngü içinde */
+  try_again -> increment_attempt;
+  increment_attempt -> attempts_check;
+  attempts_check -> enter_pin [label="Evet (<4)"];
+  attempts_check -> card_swallow [label="Hayır (≥4)"];
+  card_swallow -> end;
+
+  /* İşlemler ekranı ve seçimler */
+  transaction_screen -> choose_withdraw;
+  choose_withdraw -> wrong_button ;
+  wrong_button -> transaction_screen [label="Evet (Yanlış tuş)"];
+  wrong_button -> withdraw_screen [label="Hayır"];
+
+  /* Para çekme ve bakiye kontrolü */
+  withdraw_screen -> sufficient_funds;
+  sufficient_funds -> dispense_cash [label="Evet (yeterli)"];
+  sufficient_funds -> insufficient_msg [label="Hayır (yetersiz)"];
+
+  insufficient_msg -> transaction_screen;
+
+  /* Fiş ve bitiş */
+  dispense_cash -> ask_receipt;
+  ask_receipt -> give_card_cash_no [label="Hayır"];
+  ask_receipt -> print_receipt [label="Evet"];
+  print_receipt -> give_card_cash_yes;
+  give_card_cash_no -> end;
+  give_card_cash_yes -> end;
+}
