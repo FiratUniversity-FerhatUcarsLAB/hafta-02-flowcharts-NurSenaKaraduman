@@ -1,0 +1,127 @@
+digraph E_Ticaret_Sistemi {
+    rankdir=TB;
+    node [shape=rectangle, style=rounded, fontsize=10];
+
+    // Başlangıç ve bitiş düğümleri
+    Start [label="BAŞLA SİSTEM", shape=oval, style=filled, fillcolor=lightgreen];
+    End [label="BİTİR SİSTEM", shape=oval, style=filled, fillcolor=lightcoral];
+
+    // Kullanıcı Girişi
+    A1 [label="Kullanıcı oturumu var mı?", shape=diamond];
+    A2 [label="GİRİŞ EKRANI GÖSTER"];
+    A3 [label="Kullanıcı giriş yaptı mı?", shape=diamond];
+    A4 [label="OTURUM OLUŞTUR"];
+    A5 [label="MİSAFİR SEPETİ OLUŞTUR"];
+    A6 [label="VAR OLAN OTURUMU KULLAN"];
+
+    // Ürün ekleme ve stok kontrolü
+    B1 [label="Ürün ID, adet, varyant al"];
+    B2 [label="Stok miktarını sorgula"];
+    B3 [label="Stok yeterli mi?", shape=diamond];
+    B4 [label="SEPETE EKLE"];
+    B5 [label="UYARI: Yetersiz stok ve miktarı ayarla"];
+    
+    // Sepet işlemleri
+    C1 [label="SEPETİ GÖSTER"];
+    C2 [label="Kullanıcı eylemi bekle"];
+    C3 [label="Eylem: Ürün Sil?", shape=diamond];
+    C4 [label="Ürünü sil"];
+    C5 [label="Eylem: Adet Güncelle?", shape=diamond];
+    C6 [label="Adedi güncelle"];
+    C7 [label="Eylem: Devam Et?", shape=diamond];
+    
+    // İndirim kodu
+    D1 [label="Kullanıcı indirim kodu girdi mi?", shape=diamond];
+    D2 [label="KOD GEÇERLİ mi?", shape=diamond];
+    D3 [label="İndirim uygula"];
+    D4 [label="UYARI: Geçersiz kod"];
+    
+    // Kargo hesaplama
+    E1 [label="Adres al"];
+    E2 [label="Kargo ücretini hesapla"];
+    E3 [label="Ücretsiz kargo sınırı aşıldı mı?", shape=diamond];
+    E4 [label="Kargo ücreti = 0"];
+    E5 [label="Genel toplamı göster"];
+    
+    // Ödeme aşaması
+    F1 [label="Sipariş özetini göster"];
+    F2 [label="Ödeme yöntemi seç (Kart / Havale / Kapıda)"];
+    F3 [label="Ödeme yöntemi: Kart mı?", shape=diamond];
+    F4 [label="Kart bilgilerini al ve token oluştur"];
+    F5 [label="Ödeme sağlayıcıya gönder"];
+    F6 [label="Ödeme yöntemi: Havale mi?", shape=diamond];
+    F7 [label="Havale onayını bekle"];
+    F8 [label="Ödeme sonucu onaylandı mı?", shape=diamond];
+    F9 [label="Sipariş oluştur, stok güncelle, e-posta gönder"];
+    F10 [label="UYARI: Ödeme başarısız"];
+    
+    // Sipariş yönetimi
+    G1 [label="Sipariş durumunu sorgula"];
+    G2 [label="Sipariş teslim edildi mi?", shape=diamond];
+    G3 [label="Sipariş durumu göster"];
+
+    // Akış bağlantıları
+    Start -> A1;
+
+    A1 -> A2 [label="HAYIR"];
+    A1 -> A6 [label="EVET"];
+    A2 -> A3;
+    A3 -> A4 [label="EVET"];
+    A3 -> A5 [label="HAYIR"];
+    {A4 A5 A6} -> B1;
+
+    // Ürün ekleme
+    B1 -> B2;
+    B2 -> B3;
+    B3 -> B4 [label="EVET"];
+    B3 -> B5 [label="HAYIR"];
+    B5 -> B4;
+
+    // Sepet işlemleri
+    B4 -> C1;
+    C1 -> C2;
+    C2 -> C3;
+    C3 -> C4 [label="EVET"];
+    C3 -> C5 [label="HAYIR"];
+    C4 -> C2;
+    C5 -> C6 [label="EVET"];
+    C6 -> C2;
+    C5 -> C7 [label="HAYIR"];
+    C7 -> D1 [label="EVET"];
+    C7 -> C2 [label="HAYIR"];
+
+    // İndirim kodu
+    D1 -> D2 [label="EVET"];
+    D1 -> E1 [label="HAYIR"];
+    D2 -> D3 [label="EVET"];
+    D2 -> D4 [label="HAYIR"];
+    {D3 D4} -> E1;
+
+    // Kargo hesaplama
+    E1 -> E2;
+    E2 -> E3;
+    E3 -> E4 [label="EVET"];
+    E3 -> E5 [label="HAYIR"];
+    E4 -> E5;
+    E5 -> F1;
+
+    // Ödeme
+    F1 -> F2;
+    F2 -> F3;
+    F3 -> F4 [label="EVET"];
+    F3 -> F6 [label="HAYIR"];
+    F4 -> F5;
+    F6 -> F7 [label="EVET"];
+    F6 -> F8 [label="HAYIR"]; // Kapıda ödeme
+    {F5 F7} -> F8;
+    F8 -> F9 [label="EVET"];
+    F8 -> F10 [label="HAYIR"];
+    F9 -> G1;
+    F10 -> F2;
+
+    // Sipariş yönetimi
+    G1 -> G3;
+    G3 -> G2;
+    G2 -> End [label="EVET"];
+    G2 -> G1 [label="HAYIR"];
+}
