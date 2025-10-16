@@ -1,5 +1,4 @@
-250541046
-Nursena Karaduman
+
 
 Bu çalışmada, hastane bilgi sistemi için iki modül içeren bir akış diyagramı (flowchart) tasarlandı.
 Diyagramın en üstünde ANA MENÜ yer almakta ve kullanıcıya iki seçenek sunmaktadır:
