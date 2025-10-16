@@ -295,5 +295,4 @@ SON
 
 
 
-Dosya seçilmediDosya seçilmedi
-ChatGPT hata yapabilir. Önemli bilgileri kontrol edin.
+
