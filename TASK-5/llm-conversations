@@ -1,0 +1,591 @@
+
+Şunu dedin:
+biliyorsun, Akıllı ev guvenlik sistemi 7/24 calısır. Ana dongu icinde sensor okuma, tehdit algılama, alarm verme ve bildirim gonderme sureclerini iceren pseudocode yazabilir misin?
+ChatGPT:
+Akıllı Ev Güvenlik Sistemi — Ana Döngü için Pseudocode
+Sena, aşağıda 7/24 çalışan bir akıllı ev güvenlik sisteminin ana döngüsünü (sensor okuma, tehdit algılama, alarm, bildirim) yöneten temiz ve uygulanabilir bir pseudocode verdim. Modüler, test edilebilir ve gerçek sistemlere aktarılması kolay olacak şekilde yazdım — istersen bunu birlikte gerçek kod haline çeviririz. 😌
+
+# -------------------------
+# Başlangıç / Setup
+# -------------------------
+INIT:
+    config = load_config()                     # eşikler, bildirim kanalları, rate-limit, retry politikaları
+    sensors = init_sensors(config)             # motion, door, window, camera, smoke, co, water, vb.
+    alarm_system = init_alarm_hardware()       # siren, ışık, kapı kilidi kontrolleri
+    notifier = init_notifier(config)           # sms, push, email, call, entegrasyonlar
+    logger = init_logger()
+    health_monitor = init_health_monitor()     # battery, connectivity, sensor_heartbeat
+    threat_history = RecentEventsWindow(size=100)
+    notification_queue = ThreadSafeQueue()
+    start_thread(notification_sender_thread, notification_queue, notifier, config)
+    start_thread(watchdog_thread, health_monitor, logger, config)
+
+# -------------------------
+# Ana Döngü (sistem 7/24 çalışır)
+# -------------------------
+MAIN_LOOP:
+    while system_running:
+        cycle_start = now()
+
+        # 1) Sensörleri oku (senkron veya paralel)
+        raw_readings = read_all_sensors(sensors)            # timestamp'lı ham veriler
+        logger.debug("sensor_read", raw_readings)
+
+        # 2) Ön işlem / filtreleme (debounce, zayıf sinyal temizleme)
+        readings = preprocess_readings(raw_readings, config) 
+            # örn: hareket sensörü için debounce, kamera için basit hareket doğrulama
+
+        # 3) Sensör füzyonu ve durum çıkarımı
+        fused_state = fuse_sensors(readings)                # birkaç sensörden ortak "olay" çıkarımı
+
+        # 4) Tehdit algılama (kurallar + ML/istatistiksel model)
+        threat = detect_threat(fused_state, threat_history, config)
+            # threat: {level: 0..100, type: "intrusion"/"fire"/"co"/"water"/"tamper", evidence: [...]}
+
+        # 5) Karar & Eylem
+        if threat.level >= config.alarm_threshold:
+            logger.info("threat_detected", threat)
+            # - Alarmı tetikle (yerel)
+            if not alarm_system.is_active_for(threat.type):
+                alarm_system.activate(mode=select_alarm_mode(threat.type, config))
+            # - Bildirimi sıraya koy (rate-limit ve deduplike kontrolü)
+            notification = build_notification(threat, fused_state, config)
+            if should_enqueue_notification(notification, notification_queue, config):
+                notification_queue.enqueue(notification)
+
+            # - Olay geçmişine ekle (escalation için)
+            threat_history.push(threat)
+
+            # - Otomatik tepki(ler): kapıları kilitle, ışıkları aç, güvenlik kamerasını kayda al
+            execute_automations_for(threat, alarm_system, devices=sensors, config)
+
+        else:
+            # Tehdit yok veya düşük seviye — yanlış alarm kontrolü
+            if alarm_system.is_active():
+                if confirm_false_alarm(readings, threat_history, config):
+                    alarm_system.deactivate()
+                    notification_queue.enqueue(build_clear_notification(threat_history.latest(), config))
+                    logger.info("false_alarm_cleared")
+                else:
+                    # alarm hala aktif kalmalı (ör. manuel onay bekleniyor)
+                    logger.debug("alarm_still_active")
+
+        # 6) Sağlık kontrolü (periyodik, ağır olmayacak şekilde)
+        if cycle_start - health_monitor.last_check >= config.health_check_interval:
+            health_report = health_monitor.check_all(sensors, alarm_system, notifier)
+            logger.info("health_report", health_report)
+            if health_report.has_critical_issue():
+                notification_queue.enqueue(build_health_alert(health_report, config))
+
+        # 7) Loglama / Telemetry gönderimi (opsiyonel)
+        telemetry = build_telemetry(readings, fused_state, threat)
+        send_telemetry_if_allowed(telemetry, config)
+
+        # 8) Döngü bekleme / zamanlama
+        sleep_until_next_cycle(cycle_start, config.loop_interval)
+
+# -------------------------
+# Yardımcı fonksiyonlar (özet)
+# -------------------------
+function read_all_sensors(sensors):
+    # paralel işleyebilir; her sensor -> {id, type, value, ts, status}
+    return parallel_map(sensor.read, sensors)
+
+function fuse_sensors(readings):
+    # örn: motion + door_open -> possible intrusion; smoke + temp_up -> fire
+    return fusion_engine.evaluate(readings)
+
+function detect_threat(fused_state, history, config):
+    # Rule-based + optionally ML model
+    score_rules = evaluate_rules(fused_state, config.rules)
+    score_model = ml_model.predict_risk(fused_state) if ml_model.available else 0
+    combined_score = weighted_combine(score_rules, score_model, config)
+    return { level: combined_score, type: infer_type(fused_state), evidence: fused_state.summary }
+
+function should_enqueue_notification(notification, queue, config):
+    # dedup, rate-limit, severity-based throttling
+    if is_duplicate(notification, queue, window=config.duplicate_window): return false
+    if exceeds_rate_limit(notification.recipient, config): return false
+    return true
+
+# Bildirim gönderici thread (ayrı bir iş parçacığı)
+thread notification_sender_thread(notification_queue, notifier, config):
+    while system_running:
+        notification = notification_queue.dequeue(timeout=config.notify_poll_timeout)
+        if notification is None:
+            continue
+        try:
+            result = notifier.send(notification)
+            if result.success:
+                logger.info("notification_sent", notification.id)
+            else:
+                # retry mekanizması (exponential backoff)
+                if notification.retries < config.max_notify_retries:
+                    notification.retries += 1
+                    notification.next_try = now() + backoff(notification.retries)
+                    notification_queue.requeue(notification)
+                else:
+                    logger.error("notification_failed", notification)
+                    escalate_to_alternate_channel(notification, notifier, config)
+        except Exception e:
+            logger.exception("notify_exception", e)
+            # güvenli yeniden kuyruğa alma
+            notification.retries += 1
+            notification_queue.requeue(notification)
+
+thread watchdog_thread(health_monitor, logger, config):
+    while system_running:
+        if not health_monitor.ping_everything():
+            logger.critical("watchdog_breach")
+            # güvenli mod: tüm kritik cihazları güvenli duruma geçir
+            enter_safe_mode()
+            notification_queue.enqueue(build_watchdog_alert())
+        sleep(config.watchdog_interval)
+Kısa açıklamalar — pratik tavsiyeler
+Sensor füzyonu: Tek sensöre güvenmeyin. Örneğin hareket algılandı + kapı açıldı ise güven seviyesi artar — false positive'leri azaltır.
+
+Eşikler & ağırlıklar: config içinde dışardan kolay değiştirilebilsin (ör. gece modu, tatil modu).
+
+Bildirim stratejisi: Önceliklendirme (kritik: yangın/CO > hırsızlık > su sızıntısı) ve eskalasyon zinciri (örn. önce ev sahibi, sonra komşu, sonra acil servis).
+
+Güvenlik & gizlilik: Bildirim/telemetri TLS ile gönderilmeli; kimlik doğrulama (API anahtarları, OAuth) kullanın.
+
+Günlükleme & adli kayıt: Olaylar timestamp'li, değiştirilemez bir log deposuna (append-only) yazılmalı.
+
+Test modu / Hızlı simülasyon: Sahte olaylarla (simulated events) otomasyonlarınızı düzenli test edin.
+
+Donanım arızası yönetimi: Pil seviyesi düşük, sensör offline gibi durumlar için ayrı alarm/uyarı üretin.
+
+Yanlış pozitif temizleme: Kamera görüntüsünden hızlı doğrulama (ör. yüz tanıma / insan tespiti) ile yanlış alarmları azaltabilirsiniz.
+
+
+
+Şunu dedin:
+türkçe yazman mümkün mü, türkçe bir pseudocode istiyorum
+ChatGPT:
+Tabii Sena! Aşağıda tamamen Türkçe yazılmış, 7/24 çalışan bir akıllı ev güvenlik sistemi için ana döngü odaklı, modüler ve uygulanabilir pseudocode var. Sensör okuma → tehdit algılama → alarm → bildirim akışını netçe gösteriyor.
+
+# =========================
+# AKILLI EV GÜVENLİK SİSTEMİ (PSEUDOCODE - TÜRKÇE)
+# =========================
+
+BAŞLAT:
+    yapılandırma ← YAPILANDIRMA_YÜKLE()
+    sensörler ← SENSÖRLERİ_BAŞLAT(yapılandırma)        # hareket, kapı/pencere, duman, CO, su, kamera vb.
+    alarm ← ALARM_SİSTEMİNİ_BAŞLAT()
+    bildirici ← BİLDİRİCİYİ_BAŞLAT(yapılandırma)       # SMS, push, e-posta, arama
+    günlük ← GÜNLÜKLEYİCİYİ_BAŞLAT()
+    sağlık ← SAĞLIK_İZLEMEYİ_BAŞLAT()                  # pil, bağlantı, kalp atışı (heartbeat)
+
+    tehdit_geçmişi ← SON_OLAY_PENCERESİ(kapasite=100)
+    bildirim_kuyruğu ← GÜVENLİ_KUYRUK_OLUŞTUR()
+
+    İŞ_PARÇACIK_BAŞLAT(BİLDİRİM_GÖNDERİCİ_İŞ_PARÇACIK, bildirim_kuyruğu, bildirici, günlük, yapılandırma)
+    İŞ_PARÇACIK_BAŞLAT(GÖZCÜ_İŞ_PARÇACIK, sağlık, günlük, yapılandırma)
+
+# -------------------------
+# ANA DÖNGÜ (7/24)
+# -------------------------
+ANA_DÖNGÜ:
+    SİSTEM_ÇALIŞIYOR ← DOĞRU
+
+    İKEN SİSTEM_ÇALIŞIYOR:
+        çevrim_başı ← ŞİMDİ()
+
+        # 1) Sensör okuma
+        ham_okumalar ← TÜM_SENSÖRLERİ_OKU(sensörler)   # her öğe: {id, tür, değer, zaman, durum}
+        GÜNLÜKLE(günlük, "sensor_okuma", ham_okumalar)
+
+        # 2) Ön işleme (debounce, gürültü temizleme, sınır kontrol)
+        okumalar ← ÖN_İŞLE(ham_okumalar, yapılandırma)
+
+        # 3) Sensör füzyonu (birleştirme) ve durum çıkarımı
+        durum ← SENSÖR_FÜZYONU(okumalar)               # örn: hareket+kapı_açık ⇒ "muhtemel_giriş"
+
+        # 4) Tehdit algılama (kural + model isteğe bağlı)
+        tehdit ← TEHDİT_ALGILA(durum, tehdit_geçmişi, yapılandırma)
+        # tehdit: {seviye: 0..100, tür: "izinsiz_giriş"|"yangın"|"co"|"su"|"sabotaj", kanıt: [...]}
+
+        # 5) Karar & Eylem
+        EĞER tehdit.seviye ≥ yapılandırma.ALARM_EŞİĞİ İSE:
+            GÜNLÜKLE(günlük, "tehdit_algılandı", tehdit)
+
+            # 5a) Alarm
+            EĞER ALARM_AKTİF_DEĞİL(alarm, tehdit.tür) İSE:
+                ALARM_AKTİF_ET(alarm, MOD_SEÇ(tehdit.tür, yapılandırma))  # siren, ışık, kilit
+
+            # 5b) Bildirim hazırlama ve kuyruğa ekleme (rate-limit + yinelenen engelleme)
+            bildirim ← BİLDİRİM_OLUŞTUR(tehdit, durum, yapılandırma)
+            EĞER BİLDİRİM_SIRAYA_UYGUN(bildirim, bildirim_kuyruğu, yapılandırma) İSE:
+                KUYRUKA_EKLE(bildirim_kuyruğu, bildirim)
+
+            # 5c) Otomasyonlar (kapıları kilitle, ışıkları aç, kamera kaydı)
+            OTOMASYONLARI_ÇALIŞTIR(tehdit, sensörler, alarm, yapılandırma)
+
+            # 5d) Geçmişe yaz
+            GEÇMİŞE_EKLE(tehdit_geçmişi, tehdit)
+
+        DEĞİLSE:
+            # düşük risk; yanlış alarm temizleme
+            EĞER ALARM_AKTİF_Mİ(alarm) İSE:
+                EĞER YANLIŞ_ALARM_ONAYLA(okumalar, tehdit_geçmişi, yapılandırma) İSE:
+                    ALARM_PASİF_ET(alarm)
+                    KUYRUKA_EKLE(bildirim_kuyruğu, DURUM_DÜZELDİ_BİLDİRİMİ(tehdit_geçmişi, yapılandırma))
+                    GÜNLÜKLE(günlük, "yanlış_alarm_temizlendi")
+                DEĞİLSE:
+                    GÜNLÜKLE(günlük, "alarm_sürdürülüyor")
+
+        # 6) Sağlık kontrolü (seyrek)
+        EĞER ŞİMDİ() - sağlık.son_kontrol ≥ yapılandırma.SAĞLIK_KONTROL_ARALIĞI İSE:
+            rapor ← SAĞLIK_KONTROL_ET(sağlık, sensörler, alarm, bildirici)
+            GÜNLÜKLE(günlük, "sağlık_raporu", rapor)
+            EĞER KRİTİK_SORUN_VAR(rapor) İSE:
+                KUYRUKA_EKLE(bildirim_kuyruğu, SAĞLIK_UYARISI(rapor, yapılandırma))
+
+        # 7) Telemetri (opsiyonel)
+        telemetri ← TELEMETRİ_OLUŞTUR(okumalar, durum, tehdit)
+        TELEMETRİ_GÖNDER(telemetri, yapılandırma)
+
+        # 8) Zamanlama
+        SONRAKİ_ÇEVRİME_KADAR_UBG(çevrim_başı, yapılandırma.DÖNGÜ_ARALIĞI)
+
+# -------------------------
+# YARDIMCI İŞLEV ÖZETLERİ
+# -------------------------
+İŞLEV TÜM_SENSÖRLERİ_OKU(sensörler):
+    DÖNDÜR PARALEL_ÇALIŞTIR(sensörler, s → s.OKU())
+
+İŞLEV ÖN_İŞLE(okumalar, yapılandırma):
+    # gürültü azaltma, debounce, aralık dışı değerleri kırpma
+    DÖNDÜR FİLTRELE_VE_DÜZELT(okumalar, yapılandırma)
+
+İŞLEV SENSÖR_FÜZYONU(okumalar):
+    # örn: hareket + kapı_açık ⇒ izinsiz_giriş_kanıtı; duman + sıcaklık↑ ⇒ yangın_kanıtı
+    DÖNDÜR FÜZYON_MOTORU_DEĞERLENDİR(okumalar)
+
+İŞLEV TEHDİT_ALGILA(durum, geçmiş, yapılandırma):
+    kural_puanı ← KURALLARI_DEĞERLENDİR(durum, yapılandırma.KURALLAR)
+    model_puanı ← EĞER MODEL_MEVCUT() İSE TAHMİN_ET(durum) DEĞİLSE 0
+    birleşik ← AĞIRLIKLI_BİRLEŞTİR(kural_puanı, model_puanı, yapılandırma.AĞIRLIKLAR)
+    tür ← TÜR_ÇIKAR(durum)   # "izinsiz_giriş"|"yangın"|"co"|"su"|"sabotaj"
+    kanıt ← KISA_ÖZET(durum)
+    DÖNDÜR { seviye: birleşik, tür: tür, kanıt: kanıt }
+
+İŞLEV BİLDİRİM_SIRAYA_UYGUN(bildirim, kuyruk, yapılandırma):
+    EĞER TEKRAR_EDEN_BİLDİRİM(bildirim, kuyruk, pencere=yapılandırma.TEKRAR_PENCERESİ) İSE DÖNDÜR YANLIŞ
+    EĞER ORAN_LİMİT_AŞILDI(bildirim.alıcı, yapılandırma) İSE DÖNDÜR YANLIŞ
+    DÖNDÜR DOĞRU
+
+İŞLEV OTOMASYONLARI_ÇALIŞTIR(tehdit, sensörler, alarm, yapılandırma):
+    EĞER tehdit.tür = "izinsiz_giriş" İSE KAPILARI_KİLİTLE(); IŞIKLARI_AÇ()
+    EĞER tehdit.tür = "yangın"         İSE HAVALANDIRMAYI_AÇ(); ELEKTRİĞİ_KES_GEREKİRSE()
+    KAMERALARI_KAYDA_AL(); ÖNCELİKLİ_CİHAZLARI_KORU()
+
+# -------------------------
+# ARKA PLAN İŞ PARÇACIKLARI
+# -------------------------
+İŞ_PARÇACIK BİLDİRİM_GÖNDERİCİ_İŞ_PARÇACIK(kuyruk, bildirici, günlük, yapılandırma):
+    İKEN SİSTEM_ÇALIŞIYOR:
+        bildirim ← KUYRUKTAN_AL(kuyruk, zaman_aşımı=yapılandırma.BİLDİRİM_BEKLEME)
+        EĞER bildirim = BOŞ İSE DEVAM_ET
+        DENE:
+            sonuç ← BİLDİRİCİ_GÖNDER(bildirici, bildirim)
+            EĞER sonuç.başarılı İSE:
+                GÜNLÜKLE(günlük, "bildirim_gönderildi", bildirim.kimlik)
+            DEĞİLSE:
+                EĞER bildirim.deneme < yapılandırma.AZAMİ_YENİDEN_DENE:
+                    bildirim.deneme ← bildirim.deneme + 1
+                    bildirim.sonraki_deneme ← ŞİMDİ() + GERİ_DÖNÜŞÜMLÜ_GECİKME(bildirim.deneme)
+                    KUYRUKA_YENİDEN_EKLE(kuyruk, bildirim)
+                DEĞİLSE:
+                    GÜNLÜKLE(günlük, "bildirim_başarısız", bildirim.kimlik)
+                    ALTERNATİF_KANALA_YÜKSELT(bildirim, bildirici, yapılandırma)
+        YAKALA HATA h:
+            GÜNLÜKLE(günlük, "bildirim_istisna", h)
+            bildirim.deneme ← bildirim.deneme + 1
+            KUYRUKA_YENİDEN_EKLE(kuyruk, bildirim)
+
+İŞ_PARÇACIK GÖZCÜ_İŞ_PARÇACIK(sağlık, günlük, yapılandırma):
+    İKEN SİSTEM_ÇALIŞIYOR:
+        EĞER HERŞEY_ÇALIŞIYOR_MU(sağlık) = YANLIŞ İSE:
+            GÜNLÜKLE(günlük, "gözcü_ihlal")
+            GÜVENLİ_MODA_GEÇ()                # kritik cihazları güvenli duruma al
+            ACİL_UYARI_ÜRET_VE_SIRALA()
+        UYU(yapılandırma.GÖZCÜ_ARALIĞI)
+Notlar (kısa, pratik)
+Füzyon + eşikler: Tek sensöre değil birleşik kanıta göre alarm ver; gece/tatil modlarına göre ALARM_EŞİĞİ değiştir.
+
+Yanlış alarm azaltma: Kamera “insan” doğrulaması, kapı açıldı + hareket birlikteyse ağırlığı artırma vb.
+
+Bildirim politikası: Yineleneni engelle, oran-limit uygula; başarısızlıkta artan bekleme ile yeniden dene, alternatif kanala yükselt.
+
+Sağlık izlemesi: Pil düşük, sensör çevrimdışı, ağ kesintisi gibi durumlar için ayrı uyarı ver.
+
+Günlük/telemetri: Zaman damgalı, silinemez (append-only) kayıtlar; gizlilik ve TLS şart.
+
+
+
+Şunu dedin:
+şimdi de flowchart dot kodunu atabilir misin
+ChatGPT:
+Harika fikir! Aşağıdaki Graphviz DOT kodu, az önceki pseudocode’un akışını Türkçe bir flowchart olarak gösterir (ana döngü + iki arka plan iş parçacığı). Bunu flowchart.dot olarak kaydedip dot -Tpng flowchart.dot -o akilli_ev.png ile görselleştirebilirsin.
+
+digraph AkilliEvGuvenlikSistemi {
+  rankdir=LR;
+  fontsize=12;
+  labelloc="t";
+  label="Akıllı Ev Güvenlik Sistemi — Akış Diyagramı";
+
+  node [shape=rectangle, style=rounded];
+
+  /* ---------------------------
+   * Başlangıç & Kurulum
+   * --------------------------- */
+  start [shape=circle, label="Başlat"];
+  init  [label="Yapılandırmayı Yükle\nSensörleri/Alarmı/Bildiriciyi Başlat\nGünlük & Sağlık İzleme Başlat\nKuyrukları Kur"];
+  loop  [shape=ellipse, label="ANA DÖNGÜ (7/24)"];
+
+  start -> init -> loop;
+
+  /* ---------------------------
+   * Ana Döngü Adımları
+   * --------------------------- */
+  read    [label="1) Sensörleri Oku\n(ham_okumalar)"];
+  preproc [label="2) Ön İşleme\n(debounce / gürültü / sınır)"];
+  fuse    [label="3) Sensör Füzyonu\n(durum çıkarımı)"];
+  detect  [label="4) Tehdit Algıla\n{seviye, tür, kanıt}"];
+
+  decisionThreat [shape=diamond, label="seviye ≥ ALARM_EŞİĞİ ?"];
+
+  /* Tehdit var yolu */
+  alarmOn   [label="Alarmı Etkinleştir\n(türe göre mod seç)"];
+  notifyBld [label="Bildirim Oluştur"];
+  dedup     [shape=diamond, label="Rate-limit / Yinelenen?"];
+  enqueue   [label="Bildirimi Kuyruğa Ekle"];
+  autos     [label="Otomasyonlar:\nKapıları kilitle, ışıkları aç,\nkamerayı kayda al, vb."];
+  histAdd   [label="Tehdit Geçmişine Ekle"];
+
+  /* Tehdit yok/düşük yolu */
+  alarmActiveQ [shape=diamond, label="Alarm aktif mi?"];
+  falseQ       [shape=diamond, label="Yanlış alarm onaylandı mı?"];
+  alarmOff     [label="Alarmı Pasifleştir"];
+  clearNotif   [label="‘Durum düzeldi’ bildirimi sırala"];
+  keepAlarm    [label="Alarmı sürdür (manuel teyit bekliyor)"];
+
+  /* Sağlık kontrolü ve telemetri */
+  healthDueQ [shape=diamond, label="Sağlık kontrol zamanı mı?"];
+  healthChk  [label="Sensör/Alarm/Bildirici Sağlık Raporu"];
+  healthCritQ [shape=diamond, label="Kritik sorun var mı?"];
+  healthAlert [label="Sağlık Uyarısı Bildirimi Sırala"];
+  telemetry  [label="Telemetri Derle & Gönder"];
+  sleepNode  [shape=rectangle, label="Sonraki çevrime kadar bekle"];
+
+  /* Akış bağlantıları */
+  loop -> read -> preproc -> fuse -> detect -> decisionThreat;
+
+  decisionThreat -> alarmOn   [label="Evet"];
+  alarmOn -> notifyBld -> dedup;
+  dedup -> enqueue [label="Uygun"];
+  dedup -> autos   [label="Uygun değil"];
+  enqueue -> autos;
+  autos -> histAdd -> healthDueQ;
+
+  decisionThreat -> alarmActiveQ [label="Hayır"];
+  alarmActiveQ -> falseQ   [label="Evet"];
+  alarmActiveQ -> healthDueQ [label="Hayır"];
+
+  falseQ -> alarmOff   [label="Evet"];
+  alarmOff -> clearNotif -> healthDueQ;
+
+  falseQ -> keepAlarm  [label="Hayır"];
+  keepAlarm -> healthDueQ;
+
+  healthDueQ -> healthChk   [label="Evet"];
+  healthDueQ -> telemetry   [label="Hayır"];
+
+  healthChk -> healthCritQ;
+  healthCritQ -> healthAlert [label="Evet"];
+  healthCritQ -> telemetry   [label="Hayır"];
+  healthAlert -> telemetry;
+
+  telemetry -> sleepNode -> loop;
+
+  /* ---------------------------
+   * Bildirim Gönderici Thread
+   * --------------------------- */
+  subgraph cluster_notify_thread {
+    label="Arka Plan İş Parçacığı: Bildirim Gönderici";
+    style=dashed;
+
+    nqDeq   [label="Kuyruktan Bildirim Al\n(zaman aşımı ile)", shape=rectangle, style=rounded];
+    sendTry [label="Bildirimi Gönder", shape=rectangle, style=rounded];
+    sendOkQ [shape=diamond, label="Gönderim başarılı mı?"];
+    backoff [label="Artan bekleme ile\nyeniden sıraya ekle", shape=rectangle, style=rounded];
+    altChan [label="Alternatif kanala yükselt\n(örn. arama)", shape=rectangle, style=rounded];
+
+    nqDeq -> sendTry -> sendOkQ;
+    sendOkQ -> nqDeq   [label="Evet"];
+    sendOkQ -> backoff [label="Hayır ve deneme < max"];
+    backoff -> nqDeq;
+    sendOkQ -> altChan [label="Hayır ve deneme ≥ max"];
+    altChan -> nqDeq;
+  }
+
+  /* ---------------------------
+   * Gözcü (Watchdog) Thread
+   * --------------------------- */
+  subgraph cluster_watchdog {
+    label="Arka Plan İş Parçacığı: Gözcü (Watchdog)";
+    style=dashed;
+
+    wdPing   [label="Her şeyi ping’le / heartbeat", shape=rectangle, style=rounded];
+    wdOkQ    [shape=diamond, label="Sorun var mı?"];
+    safeMode [label="Güvenli Moda Geç\n(kritik cihazları güvene al)", shape=rectangle, style=rounded];
+    wdAlert  [label="Acil Uyarı Üret ve Sırala", shape=rectangle, style=rounded];
+
+    wdPing -> wdOkQ;
+    wdOkQ -> wdPing   [label="Hayır"];
+    wdOkQ -> safeMode [label="Evet"];
+    safeMode -> wdAlert -> wdPing;
+  }
+
+  /* Ana döngü ile thread’ler arası ilişki (soyut oklar) */
+  enqueue -> nqDeq   [style=dotted, label="kuyruk"];
+  clearNotif -> nqDeq [style=dotted, label="kuyruk"];
+  healthAlert -> nqDeq [style=dotted, label="kuyruk"];
+
+  /* Başlangıç hizası */
+  {rank=min; start; init;}
+}
+Şunu dedin:
+bu flowchati yukarıdan aşşağıya doğru yapman mümkün mü
+                                                   
+ChatGPT:
+Elbette Sena 🌸
+Aşağıda aynı akıllı ev güvenlik sistemi akışını bu sefer yukarıdan aşağıya (top-to-bottom) bir düzende gösteren Graphviz DOT kodunu verdim.
+Bu düzen, özellikle rapor veya sunumlarda daha okunaklı olur çünkü adımlar dikey akıyor.
+Kaydedip şu komutla görselleştirebilirsin:
+dot -Tpng flowchart_vertical.dot -o akilli_ev_dikey.png
+
+digraph AkilliEvGuvenlikSistemi {
+  rankdir=TB;  // Yukarıdan aşağıya yön
+  fontsize=12;
+  labelloc="t";
+  label="Akıllı Ev Güvenlik Sistemi — Dikey Akış Diyagramı";
+
+  node [shape=rectangle, style=rounded, fontname="Arial"];
+
+  /* ---------------------------
+   * Başlangıç ve Kurulum
+   * --------------------------- */
+  start [shape=circle, label="Başlat"];
+  init  [label="Yapılandırmayı Yükle\nSensörleri, Alarmı, Bildiriciyi Başlat\nGünlük & Sağlık İzleme Başlat\nKuyrukları Kur"];
+  loop  [shape=ellipse, label="ANA DÖNGÜ (7/24)"];
+
+  start -> init -> loop;
+
+  /* ---------------------------
+   * Ana Döngü Adımları
+   * --------------------------- */
+  read    [label="1) Sensörleri Oku"];
+  preproc [label="2) Ön İşleme (gürültü, debounce)"];
+  fuse    [label="3) Sensör Füzyonu (durum çıkarımı)"];
+  detect  [label="4) Tehdit Algıla"];
+  decisionThreat [shape=diamond, label="Seviye ≥ Eşik?"];
+
+  alarmOn   [label="Alarmı Etkinleştir"];
+  notifyBld [label="Bildirim Oluştur"];
+  dedup     [shape=diamond, label="Yinelenen / Limit Aşıldı mı?"];
+  enqueue   [label="Bildirim Kuyruğa Ekle"];
+  autos     [label="Otomasyonları Çalıştır\n(Kapı, Işık, Kamera...)"];
+  histAdd   [label="Tehdit Geçmişine Ekle"];
+
+  alarmActiveQ [shape=diamond, label="Alarm aktif mi?"];
+  falseQ       [shape=diamond, label="Yanlış alarm mı?"];
+  alarmOff     [label="Alarmı Pasifleştir"];
+  clearNotif   [label="‘Durum düzeldi’ bildirimi sırala"];
+  keepAlarm    [label="Alarmı sürdür"];
+
+  healthDueQ [shape=diamond, label="Sağlık kontrol zamanı mı?"];
+  healthChk  [label="Sağlık Raporu Al"];
+  healthCritQ [shape=diamond, label="Kritik sorun var mı?"];
+  healthAlert [label="Sağlık Uyarısı Bildirimi"];
+  telemetry  [label="Telemetri Gönder"];
+  sleepNode  [label="Bekle ve Döngüyü Tekrarla"];
+
+  loop -> read -> preproc -> fuse -> detect -> decisionThreat;
+
+  decisionThreat -> alarmOn   [label="Evet"];
+  alarmOn -> notifyBld -> dedup;
+  dedup -> enqueue [label="Uygun"];
+  dedup -> autos   [label="Değil"];
+  enqueue -> autos -> histAdd -> healthDueQ;
+
+  decisionThreat -> alarmActiveQ [label="Hayır"];
+  alarmActiveQ -> falseQ [label="Evet"];
+  alarmActiveQ -> healthDueQ [label="Hayır"];
+
+  falseQ -> alarmOff [label="Evet"];
+  alarmOff -> clearNotif -> healthDueQ;
+
+  falseQ -> keepAlarm [label="Hayır"];
+  keepAlarm -> healthDueQ;
+
+  healthDueQ -> healthChk [label="Evet"];
+  healthDueQ -> telemetry [label="Hayır"];
+
+  healthChk -> healthCritQ;
+  healthCritQ -> healthAlert [label="Evet"];
+  healthCritQ -> telemetry [label="Hayır"];
+  healthAlert -> telemetry -> sleepNode -> loop;
+
+  /* ---------------------------
+   * Arka Plan Thread 1 - Bildirim Gönderici
+   * --------------------------- */
+  subgraph cluster_notify_thread {
+    label="İş Parçacığı: Bildirim Gönderici";
+    style=dashed;
+    fontname="Arial";
+
+    nqDeq   [label="Kuyruktan Bildirim Al"];
+    sendTry [label="Bildirimi Gönder"];
+    sendOkQ [shape=diamond, label="Gönderim başarılı mı?"];
+    backoff [label="Tekrar dene (geri dönüşümlü bekleme)"];
+    altChan [label="Alternatif kanal (ör. arama)"];
+
+    nqDeq -> sendTry -> sendOkQ;
+    sendOkQ -> nqDeq [label="Evet"];
+    sendOkQ -> backoff [label="Hayır < max"];
+    backoff -> nqDeq;
+    sendOkQ -> altChan [label="Hayır ≥ max"];
+    altChan -> nqDeq;
+  }
+
+  /* ---------------------------
+   * Arka Plan Thread 2 - Gözcü
+   * --------------------------- */
+  subgraph cluster_watchdog {
+    label="İş Parçacığı: Gözcü (Watchdog)";
+    style=dashed;
+    fontname="Arial";
+
+    wdPing   [label="Sistem Kalp Atışı (Ping)"];
+    wdOkQ    [shape=diamond, label="Sorun var mı?"];
+    safeMode [label="Güvenli Moda Geç"];
+    wdAlert  [label="Acil Uyarı Gönder"];
+
+    wdPing -> wdOkQ;
+    wdOkQ -> wdPing [label="Hayır"];
+    wdOkQ -> safeMode [label="Evet"];
+    safeMode -> wdAlert -> wdPing;
+  }
+
+  /* Dotted connections to threads */
+  enqueue -> nqDeq   [style=dotted, label="kuyruk"];
+  clearNotif -> nqDeq [style=dotted];
+  healthAlert -> nqDeq [style=dotted];
+}
+İstersen bir sonraki adımda sana bu diyagramın görselleştirilmiş halini (PNG) oluşturmam için uygun ortamda render etmeyi de gösterebilirim 💕
+
+
+
