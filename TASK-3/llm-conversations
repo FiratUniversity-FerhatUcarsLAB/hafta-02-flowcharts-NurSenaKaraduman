@@ -1,0 +1,260 @@
+
+#Chatgpt ile Sohbet geçmişi
+
+Şunu dedin:
+ merhaba Hastane randevu sistemi icin algoritma: kimlik dogrulama, poliklinik 
+ secimi, doktor listesi goruntuleme, uygun saatleri gosterme, randevu 
+ onaylama ve SMS gonderme. Pseudocode yazalım
+ChatGPT:
+Tabii! Aşağıda hastane randevu sistemi için adım adım ilerleyen, anlaşılır bir pseudocode (yapay kod) örneği bulabilirsin. Bu algoritma kimlik doğrulama, poliklinik seçimi, doktor listesi, uygun saatlerin gösterilmesi, randevu onaylama ve SMS gönderme adımlarını içerir.
+
+🏥 HASTANE RANDEVU SİSTEMİ – PSEUDOCODE
+BAŞLA
+
+// 1. Kimlik Doğrulama
+EKRANA "T.C. Kimlik Numaranızı giriniz:" YAZ
+TC = GİRİŞ_AL()
+EKRANA "Şifrenizi giriniz:" YAZ
+SIFRE = GİRİŞ_AL()
+
+EĞER KimlikDogrula(TC, SIFRE) = DOĞRU İSE
+    EKRANA "Giriş başarılı. Hoş geldiniz!" YAZ
+AKSİ HALDE
+    EKRANA "Kimlik doğrulama başarısız. Tekrar deneyin." YAZ
+    DUR
+
+// 2. Poliklinik Seçimi
+POLIKLINIK_LISTESI = PoliklinikleriGetir()
+EKRANA "Lütfen bir poliklinik seçiniz:" YAZ
+PoliklinikListesiniGöster(POLIKLINIK_LISTESI)
+
+SECILEN_POLIKLINIK = GİRİŞ_AL()
+
+// 3. Doktor Listesi Görüntüleme
+DOKTOR_LISTESI = DoktorlariGetir(SECILEN_POLIKLINIK)
+EKRANA "Bu poliklinikteki doktorlar:" YAZ
+DoktorListesiniGöster(DOKTOR_LISTESI)
+
+EKRANA "Randevu almak istediğiniz doktoru seçiniz:" YAZ
+SECILEN_DOKTOR = GİRİŞ_AL()
+
+// 4. Uygun Saatleri Gösterme
+UYGUN_SAATLER = UygunSaatleriGetir(SECILEN_DOKTOR)
+EĞER UYGUN_SAATLER BOŞSA
+    EKRANA "Bu doktorda şu anda uygun saat yok. Lütfen başka tarih seçiniz." YAZ
+    DUR
+AKSİ HALDE
+    EKRANA "Uygun saatler:" YAZ
+    SaatleriGöster(UYGUN_SAATLER)
+
+// 5. Randevu Saati Seçimi
+EKRANA "Randevu almak istediğiniz saati seçiniz:" YAZ
+SECILEN_SAAT = GİRİŞ_AL()
+
+// 6. Randevu Onaylama
+EKRANA "Randevunuzu onaylıyor musunuz? (E/H)" YAZ
+ONAY = GİRİŞ_AL()
+
+EĞER ONAY = "E" İSE
+    RandevuKaydet(TC, SECILEN_POLIKLINIK, SECILEN_DOKTOR, SECILEN_SAAT)
+    SMS_Gonder(TC, "Randevunuz başarıyla oluşturuldu: " + SECILEN_SAAT)
+    EKRANA "Randevunuz onaylandı ve SMS gönderildi." YAZ
+AKSİ HALDE
+    EKRANA "Randevu iptal edildi." YAZ
+SON
+
+BİTİR
+🧩 Yardımcı Fonksiyonlar (örnek)
+Fonksiyon KimlikDogrula(TC, SIFRE):
+    EĞER (TC ve SIFRE veritabanında eşleşiyorsa)
+        DÖN DOĞRU
+    DEĞİLSE
+        DÖN YANLIŞ
+
+Fonksiyon PoliklinikleriGetir():
+    // Veritabanından tüm poliklinikleri döndür
+
+Fonksiyon DoktorlariGetir(Poliklinik):
+    // Seçilen polikliniğe bağlı doktor listesini döndür
+
+Fonksiyon UygunSaatleriGetir(Doktor):
+    // Doktorun boş randevu saatlerini döndür
+
+Fonksiyon RandevuKaydet(TC, Poliklinik, Doktor, Saat):
+    // Randevuyu veritabanına kaydet
+
+Fonksiyon SMS_Gonder(TC, Mesaj):
+    // TC'ye bağlı telefon numarasına SMS gönder
+İstersen bu pseudocode’u bir akış diyagramı (flowchart) olarak da çizebilirim veya Python / C# gibi bir dile dönüştürebilirim.
+Hangisini istersin?
+
+Şunu dedin:
+harika şimdi de başka bir modul yapalım deminki modul 1 di şimdi modul 2 olarak                      Tahlil sonucu gorüntuleme sistemi: kimlik dogrulama, tahlil varlıgı 
+ kontrolu, sonuc hazır mı kontrolu, goruntuleme veya bekleme mesajı, PDF 
+ indirme. Pseudocode yaz.alım
+ChatGPT:
+Harika 👍
+Şimdi Modül 2: Tahlil Sonucu Görüntüleme Sistemi için ayrıntılı, adım adım bir pseudocode yazalım.
+Bu modül kimlik doğrulama, tahlil varlığı ve durumu kontrolü, sonuç görüntüleme veya bekleme mesajı, PDF indirme işlemlerini içeriyor.
+
+🧬 MODÜL 2: TAHLİL SONUCU GÖRÜNTÜLEME SİSTEMİ – PSEUDOCODE
+BAŞLA
+
+// 1. Kimlik Doğrulama
+EKRANA "T.C. Kimlik Numaranızı giriniz:" YAZ
+TC = GİRİŞ_AL()
+EKRANA "Şifrenizi giriniz:" YAZ
+SIFRE = GİRİŞ_AL()
+
+EĞER KimlikDogrula(TC, SIFRE) = DOĞRU İSE
+    EKRANA "Giriş başarılı. Hoş geldiniz!" YAZ
+AKSİ HALDE
+    EKRANA "Kimlik doğrulama başarısız. Tekrar deneyin." YAZ
+    DUR
+
+// 2. Tahlil Varlığı Kontrolü
+TAHLIL_LISTESI = TahlilleriGetir(TC)
+
+EĞER TAHLIL_LISTESI BOŞSA
+    EKRANA "Herhangi bir tahlil kaydınız bulunmamaktadır." YAZ
+    DUR
+AKSİ HALDE
+    EKRANA "Mevcut tahlil kayıtlarınız:" YAZ
+    TahlilListesiniGöster(TAHLIL_LISTESI)
+
+EKRANA "Sonucunu görüntülemek istediğiniz tahlili seçiniz:" YAZ
+SECILEN_TAHLIL = GİRİŞ_AL()
+
+// 3. Sonuç Hazır mı Kontrolü
+EĞER SonucHazirMi(SECILEN_TAHLIL) = DOĞRU İSE
+    // 4. Sonucu Görüntüleme
+    SONUC = SonucuGetir(SECILEN_TAHLIL)
+    EKRANA "Tahlil sonucu:" YAZ
+    SonucuGöster(SONUC)
+    
+    // 5. PDF İndirme Seçeneği
+    EKRANA "Sonucu PDF olarak indirmek ister misiniz? (E/H)" YAZ
+    INDIR_ONAY = GİRİŞ_AL()
+
+    EĞER INDIR_ONAY = "E" İSE
+        PDF_OlusturVeIndir(SONUC)
+        EKRANA "PDF indiriliyor..." YAZ
+    AKSİ HALDE
+        EKRANA "İndirme iptal edildi." YAZ
+AKSİ HALDE
+    // 4. Bekleme Mesajı
+    EKRANA "Tahlil sonucunuz henüz hazır değildir. Lütfen daha sonra tekrar deneyiniz." YAZ
+
+BİTİR
+🧩 Yardımcı Fonksiyonlar
+Fonksiyon KimlikDogrula(TC, SIFRE):
+    // Veritabanında TC ve şifreyi kontrol et
+    EĞER eşleşme varsa DÖN DOĞRU
+    DEĞİLSE DÖN YANLIŞ
+
+Fonksiyon TahlilleriGetir(TC):
+    // Kullanıcının tahlil kayıtlarını döndür
+
+Fonksiyon SonucHazirMi(TahlilID):
+    // İlgili tahlil kaydının durumunu kontrol et (Hazır / Beklemede)
+
+Fonksiyon SonucuGetir(TahlilID):
+    // Tahlil sonucunu (metin veya tablo olarak) döndür
+
+Fonksiyon PDF_OlusturVeIndir(Sonuc):
+    // Sonucu PDF formatına çevir ve kullanıcıya indir
+İstersen bu modül 2’yi Modül 1 ile entegre edecek şekilde genel bir “Hastane Yönetim Sistemi Ana Menüsü” pseudocode’u da oluşturabiliriz.
+Bunu ister misin?
+
+Şunu dedin:
+şimdi en üstte ANA MENU seçeneğiyle başlamak koşuluyla bu iki pseudocodu u flowcrat dot yapıp birleştirelim. anlattıgım gibi ANA MENU flowchatın en başında olsun sonra bu iki modul subgraph olarak iki ayrı kutucukla birleştir. dot kodunu at
+ChatGPT:
+Harika fikir 🎯
+Aşağıda, Graphviz DOT dilinde yazılmış birleşik bir flowchart (akış diyagramı) kodu bulunuyor.
+En üstte ANA MENÜ düğümü yer alıyor; buradan kullanıcı Modül 1 (Randevu Sistemi) veya Modül 2 (Tahlil Sonucu Görüntüleme) alt akışlarına yönlendiriliyor.
+Her modül kendi subgraph (küme/kutucuk) içinde gösteriliyor.
+
+🩺 HASTANE SİSTEMİ – BİRLEŞİK FLOWCHART (DOT KODU)
+digraph HASTANE_SISTEMI {
+    rankdir=TB;
+    node [shape=rectangle, style=rounded, fontname="Arial"];
+
+    // === ANA MENÜ ===
+    START [label="🏥 ANA MENÜ\n1. Randevu Sistemi\n2. Tahlil Sonucu Görüntüleme"];
+    SECIM [label="Kullanıcı Seçim Yapar (1 veya 2)"];
+    START -> SECIM;
+
+    // === MODÜL 1: RANDEVU SİSTEMİ ===
+    subgraph cluster_MODUL1 {
+        label="MODÜL 1: Randevu Sistemi";
+        style=rounded;
+        color=lightblue;
+
+        M1_START [label="Kimlik Doğrulama"];
+        M1_POLIKLINIK [label="Poliklinik Seçimi"];
+        M1_DOKTOR [label="Doktor Listesi Görüntüleme"];
+        M1_SAAT [label="Uygun Saatleri Göster"];
+        M1_ONAY [label="Randevu Onaylama"];
+        M1_SMS [label="SMS Gönderme"];
+        M1_BITIR [label="Modül 1 Bitti"];
+
+        M1_START -> M1_POLIKLINIK -> M1_DOKTOR -> M1_SAAT -> M1_ONAY -> M1_SMS -> M1_BITIR;
+    }
+
+    // === MODÜL 2: TAHLİL SONUCU GÖRÜNTÜLEME ===
+    subgraph cluster_MODUL2 {
+        label="MODÜL 2: Tahlil Sonucu Görüntüleme Sistemi";
+        style=rounded;
+        color=lightgreen;
+
+        M2_START [label="Kimlik Doğrulama"];
+        M2_TAHLIL [label="Tahlil Varlığı Kontrolü"];
+        M2_HAZIR [label="Sonuç Hazır mı?"];
+        M2_GORUNTULE [label="Sonuç Görüntüleme"];
+        M2_PDF [label="PDF İndirme"];
+        M2_BEKLE [label="Sonuç Beklemede Mesajı"];
+        M2_BITIR [label="Modül 2 Bitti"];
+
+        M2_START -> M2_TAHLIL -> M2_HAZIR;
+        M2_HAZIR -> M2_GORUNTULE [label="Evet"];
+        M2_GORUNTULE -> M2_PDF -> M2_BITIR;
+        M2_HAZIR -> M2_BEKLE [label="Hayır"];
+        M2_BEKLE -> M2_BITIR;
+    }
+
+    // === ANA MENÜDEN MODÜLLERE YÖNLENDİRME ===
+    SECIM -> M1_START [label="1"];
+    SECIM -> M2_START [label="2"];
+
+    // === SON ===
+    END [label="Sistem Sonu"];
+    M1_BITIR -> END;
+    M2_BITIR -> END;
+}
+🔧 Nasıl Görselleştirirsin:
+Bu DOT kodunu görselleştirmek için:
+
+ adresine git.
+
+Yukarıdaki kodu yapıştır.
+
+Akış diyagramı otomatik olarak çizilecektir.
+
+İstersen bu diyagramın PNG veya PDF halini de oluşturabilirim (örneğin “hastane_sistemi_flowchart.pdf”).
+Bunu ister misin?
+
+Şunu dedin:
+son olarak yaptığımızı 5-6 satır ile açıklayalım
+ChatGPT:
+Bu çalışmada, hastane bilgi sistemi için iki modül içeren bir akış diyagramı (flowchart) tasarlandı.
+Diyagramın en üstünde ANA MENÜ yer almakta ve kullanıcıya iki seçenek sunmaktadır:
+
+Randevu Sistemi (Modül 1): Kimlik doğrulama, poliklinik ve doktor seçimi, uygun saatleri gösterme, randevu onaylama ve SMS gönderme adımlarını içerir.
+
+Tahlil Sonucu Görüntüleme Sistemi (Modül 2): Kimlik doğrulama, tahlil kaydı kontrolü, sonuç durumu kontrolü, hazırsa sonucu görüntüleme ve PDF indirme, değilse bekleme mesajı gösterme işlemlerini kapsar.
+
+Bu iki modül, Graphviz DOT diliyle oluşturulan subgraph yapılarıyla görsel olarak ayrılmıştır ve kullanıcı seçiminden sonra ilgili modül akışına yönlendirilir.
+
+
+
+
