@@ -1,4 +1,5 @@
 İsim - Soy isim : Nursena Karaduman
+
 Öğrenci No: 250541046
 
 Bu akış kart takmadan başlayıp kart iadesine kadar tüm adımları gösterir.  
